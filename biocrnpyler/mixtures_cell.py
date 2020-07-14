@@ -39,37 +39,20 @@ class ExpressionDilutionMixture(Mixture):
                         components=components+default_components, global_mechanisms = global_mechanisms, **kwargs)
 
     #Overwriting compile_crn to replace transcripts with proteins for all DNA_assemblies
+    #Overwriting compile_crn to turn off transcription in all DNAassemblies
     def compile_crn(self) -> ChemicalReactionNetwork:
-        """ Creates a chemical reaction network from the species and reactions associated with a mixture object
-        :return: ChemicalReactionNetwork
-        """
-        resetwarnings()#Reset warnings - better to toggle them off manually.
 
-        species = self.update_species()
-        reactions = self.update_reactions()
+        for component in self.components:
+            if isinstance(component, DNAassembly):
+                #Only turn off transcription for an Assembly that makes a Protein. 
+                #Some assemblies might only make RNA!
+                if component.protein is not None:
+                     #This will turn off transcription and set Promoter.transcript = False
+                     #Mechanisms that recieve no transcript but a protein will use the protein instead.
+                    component.update_transcript(False)
 
-
-        for comp in self.components:
-            if isinstance(comp, DNAassembly):
-                if comp.transcript is not None and comp.protein is not None:
-                    for i, s in enumerate(species):
-                        species[i] = s.replace_species(comp.transcript, comp.protein)
-                    for i, r in enumerate(reactions):
-                        reactions[i] = r.replace_species(comp.transcript, comp.protein)
-
-        self.crn_species = list(set(species))
-        self.crn_reactions = reactions
-        #global mechanisms are applied last and only to all the species 
-        global_mech_species, global_mech_reactions = self.apply_global_mechanisms()
-
-        species += global_mech_species
-        reactions += global_mech_reactions
-
-        species = self.set_initial_condition(species)
-        species.sort(key = lambda s:repr(s))
-        reactions.sort(key = lambda r:repr(r))
-        CRN = ChemicalReactionNetwork(species, reactions)
-        return CRN
+        #Call the superclass function
+        return Mixture.compile_crn(self)
 
 #A Mixture with continious dilution for non-DNA species
 #mRNA is also degraded via a seperate reaction to represent endonucleases
@@ -140,9 +123,9 @@ class TxTlDilutionMixture(Mixture):
         dilution_mechanism = Dilution(filter_dict = {"dna":False, "machinery":False}, default_on = True)
         global_mechanisms = {"dilution":dilution_mechanism}
 
-        background_parameters = {("transcription", "ku"):50, ("transcription", "kb"):500, ("transcription", "ktx"):0.1, 
-              ("translation","ku"):5, ("translation","kb"):500, ("translation", "ktl"):.1,
-              ("rna_degredation","ku"):50, ("rna_degredation","kb"):500, ("rna_degredation", "kdeg"):0.1}
+        background_parameters = {("transcription", None, "ku"):50, ("transcription", None, "kb"):500, ("transcription", None, "ktx"):0.1, 
+              ("translation",None, "ku"):5, ("translation",None, "kb"):500, ("translation",None, "ktl"):.1,
+              ("rna_degredation",None, "ku"):50, ("rna_degredation",None, "kb"):500, ("rna_degredation",None, "kdeg"):0.1}
 
         BackgroundProcesses = DNAassembly(name = "cellular_processes", promoter = "average_promoter", rbs = "average_rbs", parameters = background_parameters)
 
